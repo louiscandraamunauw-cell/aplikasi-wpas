@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPresence - Smart Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .sidebar-link:hover { background: #eff6ff; color: #2563eb; }
+        .sidebar-link.active { background: #2563eb; color: white; }
+
+        .attendance-btn.active-hadir { background-color: #10b981; color: white; border-color: #10b981; }
+        .attendance-btn.active-izin { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+        .attendance-btn.active-sakit { background-color: #6366f1; color: white; border-color: #6366f1; }
+        .attendance-btn.active-alpha { background-color: #ef4444; color: white; border-color: #ef4444; }
+        .attendance-btn.active-terlambat { background-color: #f59e0b; color: white; border-color: #f59e0b; }
+        
+        .modal-enter { animation: modalFadeIn 0.3s ease-out; }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .class-badge {
+            @apply px-2 py-0.5 rounded text-[10px] font-bold uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="min-h-screen flex">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 shadow-sm z-20">
+            <div class="p-6">
+                <div class="flex items-center gap-2 text-blue-600 font-bold text-2xl">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>EduPresence</span>
+                </div>
+            </div>
+            <nav class="flex-1 px-4 space-y-1" id="nav-links"></nav>
+            <div class="p-6 border-t border-slate-100">
+                <button onclick="logout()" class="flex items-center gap-3 text-slate-500 hover:text-red-600 transition w-full">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="font-medium">Keluar</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
+                <div class="flex items-center gap-4">
+                    <button class="md:hidden text-slate-600 text-xl"><i class="fas fa-bars"></i></button>
+                    <div id="currentTime" class="text-slate-500 font-medium hidden sm:block"></div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-right hidden sm:block">
+                        <p id="userName" class="text-sm font-semibold text-slate-800">Memuat...</p>
+                        <p id="userRole" class="text-xs text-slate-500">Administrator Sekolah</p>
+                    </div>
+                    <img id="userAvatar" src="" class="h-10 w-10 rounded-full border border-slate-200" alt="Avatar">
+                </div>
+            </header>
+
+            <!-- Sub Header: Class Filter -->
+            <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 overflow-x-auto no-scrollbar">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Pilih Kelas:</span>
+                <div id="classTabs" class="flex gap-2"></div>
+            </div>
+
+            <div id="contentArea" class="flex-1 overflow-y-auto p-4 md:p-6"></div>
+        </main>
+    </div>
+
+    <!-- Modal Input Massal -->
+    <div id="modalMassal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 modal-enter">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800">Tambah Siswa Baru</h3>
+                <button onclick="toggleModal('modalMassal', false)" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-2 uppercase">Target Kelas</label>
+                <select id="targetClassSelect" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                    <option value="7">Kelas 7</option>
+                    <option value="8">Kelas 8</option>
+                    <option value="9">Kelas 9</option>
+                    <option value="10">Kelas 10</option>
+                    <option value="11">Kelas 11</option>
+                    <option value="12">Kelas 12</option>
+                </select>
+            </div>
+
+            <p class="text-sm text-slate-500 mb-2">Daftar Nama (Pisahkan dengan baris baru):</p>
+            <textarea id="bulkInputArea" rows="8" placeholder="Contoh:&#10;Andi Wijaya&#10;Budi Santoso" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-sans text-sm mb-4"></textarea>
+            
+            <div class="flex gap-3">
+                <button onclick="processBulkInput()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">Simpan Data</button>
+                <button onclick="toggleModal('modalMassal', false)" class="flex-1 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl text-3xl mb-4">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800">EduPresence</h1>
+            <p class="text-slate-500 mb-8">Sistem Absensi Terpadu Kelas 7-12</p>
+            <input type="text" id="loginUser" placeholder="Nama Guru..." class="w-full px-4 py-3 rounded-xl border border-slate-200 mb-4 focus:ring-2 focus:ring-blue-500 outline-none">
+            <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">Masuk Sistem</button>
+        </div>
+    </div>
+
+    <script>
+        const POINTS_CONFIG = {
+            reward: { 'Hadir': 10 },
+            penalty: { 'Alpha': 5, 'Terlambat': 2, 'Izin': 1, 'Sakit': 0 }
+        };
+
+        const AVAILABLE_CLASSES = ["7", "8", "9", "10", "11", "12"];
+        let currentSelectedClass = "7";
+        let students = [
+            { id: 1, name: "Andi Wijaya", class: "7", nis: "1001", attendance: "-", lastDate: "-", penaltyPoints: 0, rewardPoints: 10 },
+            { id: 2, name: "Budi Santoso", class: "7", nis: "1002", attendance: "-", lastDate: "-", penaltyPoints: 2, rewardPoints: 50 },
+            { id: 3, name: "Citra Lestari", class: "8", nis: "2001", attendance: "-", lastDate: "-", penaltyPoints: 0, rewardPoints: 20 }
+        ];
+
+        window.onload = () => {
+            updateClock();
+            setInterval(updateClock, 1000);
+            renderNav();
+            renderClassTabs();
+        };
+
+        function updateClock() {
+            const now = new Date();
+            const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+            document.getElementById('currentTime').innerText = now.toLocaleDateString('id-ID', options);
+        }
+
+        function renderNav() {
+            const nav = document.getElementById('nav-links');
+            const items = [
+                { id: 'bulk', label: 'Absensi Harian', icon: 'fa-calendar-check' },
+                { id: 'manage', label: 'Data Siswa', icon: 'fa-users-cog' },
+                { id: 'dashboard', label: 'Statistik & Ranking', icon: 'fa-chart-line' }
+            ];
+            nav.innerHTML = items.map(item => `
+                <button onclick="switchPage('${item.id}')" class="sidebar-link w-full flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium text-slate-600" id="link-${item.id}">
+                    <i class="fas ${item.icon} w-5"></i>
+                    <span>${item.label}</span>
+                </button>
+            `).join('');
+        }
+
+        function renderClassTabs() {
+            const container = document.getElementById('classTabs');
+            container.innerHTML = AVAILABLE_CLASSES.map(cls => `
+                <button onclick="selectClass('${cls}')" 
+                    class="px-4 py-1.5 rounded-full text-xs font-bold transition-all border
+                    ${currentSelectedClass === cls ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300'}">
+                    KELAS ${cls}
+                </button>
+            `).join('');
+        }
+
+        function selectClass(cls) {
+            currentSelectedClass = cls;
+            renderClassTabs();
+            // Refresh current page
+            const activeLink = document.querySelector('.sidebar-link.active');
+            if (activeLink) {
+                const pageId = activeLink.id.replace('link-', '');
+                switchPage(pageId);
+            }
+        }
+
+        function handleLogin() {
+            const name = document.getElementById('loginUser').value || 'Guru';
+            document.getElementById('loginOverlay').classList.add('hidden');
+            document.getElementById('userName').innerText = name;
+            document.getElementById('userAvatar').src = `https://ui-avatars.com/api/?name=${name}&background=2563eb&color=fff`;
+            switchPage('bulk');
+        }
+
+        function logout() { document.getElementById('loginOverlay').classList.remove('hidden'); }
+
+        function switchPage(pageId) {
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+            document.getElementById(`link-${pageId}`)?.classList.add('active');
+            
+            if (pageId === 'bulk') renderAttendance();
+            else if (pageId === 'manage') renderManage();
+            else if (pageId === 'dashboard') renderDashboard();
+        }
+
+        function getFilteredStudents() {
+            return students.filter(s => s.class === currentSelectedClass);
+        }
+
+        // View: Absensi
+        function renderAttendance() {
+            const filtered = getFilteredStudents();
+            document.getElementById('contentArea').innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Absensi Kelas ${currentSelectedClass}</h2>
+                            <p class="text-slate-500 text-sm">Menampilkan ${filtered.length} siswa di kelas ini.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-widest border-b border-slate-200">
+                                <tr>
+                                    <th class="px-6 py-4">Siswa</th>
+                                    <th class="px-6 py-4">Status Kehadiran</th>
+                                    <th class="px-6 py-4 text-center">Poin (Prestasi | Pinalti)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${filtered.length === 0 ? `<tr><td colspan="3" class="px-6 py-12 text-center text-slate-400">Belum ada siswa di Kelas ${currentSelectedClass}.</td></tr>` : 
+                                  filtered.map(s => `
+                                    <tr class="hover:bg-slate-50/50 transition">
+                                        <td class="px-6 py-4">
+                                            <div class="font-bold text-slate-800">${s.name}</div>
+                                            <div class="text-[10px] text-slate-400 font-mono">${s.nis}</div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex gap-1">
+                                                ${['Hadir', 'Izin', 'Sakit', 'Terlambat', 'Alpha'].map(type => `
+                                                    <button onclick="updateAttendance(${s.id}, '${type}')" 
+                                                        class="attendance-btn px-2 py-1.5 rounded-lg border border-slate-200 text-[9px] font-black transition
+                                                        ${s.attendance === type ? getActiveClass(type) : 'bg-white text-slate-400 hover:border-slate-300'}">
+                                                        ${type.toUpperCase()}
+                                                    </button>
+                                                `).join('')}
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-center">
+                                            <div class="flex justify-center gap-4">
+                                                <span class="font-black text-emerald-600"><i class="fas fa-star text-[8px] mr-1"></i>${s.rewardPoints}</span>
+                                                <span class="font-black text-rose-500"><i class="fas fa-exclamation-triangle text-[8px] mr-1"></i>${s.penaltyPoints}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getActiveClass(type) { return `active-${type.toLowerCase()}`; }
+
+        function updateAttendance(id, status) {
+            const s = students.find(x => x.id === id);
+            if (!s) return;
+
+            if (status === 'Hadir') {
+                s.rewardPoints += POINTS_CONFIG.reward['Hadir'];
+                showToast(`${s.name} +${POINTS_CONFIG.reward['Hadir']} Poin Prestasi!`, 'reward');
+            } else if (POINTS_CONFIG.penalty[status] > 0) {
+                s.penaltyPoints += POINTS_CONFIG.penalty[status];
+                showToast(`${s.name} +${POINTS_CONFIG.penalty[status]} Poin Pinalti.`, 'penalty');
+            }
+
+            s.attendance = status;
+            renderAttendance();
+        }
+
+        // View: Management
+        function renderManage() {
+            const filtered = getFilteredStudents();
+            document.getElementById('contentArea').innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-slate-800">Data Siswa Kelas ${currentSelectedClass}</h2>
+                        <button onclick="toggleModal('modalMassal', true)" class="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm shadow-lg hover:bg-blue-700 transition">
+                            Tambah Siswa
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${filtered.map(s => `
+                            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                                <div class="absolute top-0 right-0 p-2">
+                                     <button onclick="deleteStudent(${s.id})" class="text-slate-300 hover:text-rose-500 p-2"><i class="fas fa-trash"></i></button>
+                                </div>
+                                <div class="flex items-center gap-4 mb-4">
+                                    <div class="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-xl uppercase">
+                                        ${s.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-800">${s.name}</h4>
+                                        <p class="text-[10px] text-slate-400 font-mono">${s.nis}</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <div class="flex-1 bg-emerald-50 rounded-xl p-2 text-center">
+                                        <div class="text-[8px] font-bold text-emerald-600 uppercase">Prestasi</div>
+                                        <div class="font-black text-emerald-700">${s.rewardPoints}</div>
+                                    </div>
+                                    <div class="flex-1 bg-rose-50 rounded-xl p-2 text-center">
+                                        <div class="text-[8px] font-bold text-rose-600 uppercase">Pinalti</div>
+                                        <div class="font-black text-rose-700">${s.penaltyPoints}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // View: Dashboard
+        function renderDashboard() {
+            const filtered = getFilteredStudents();
+            const ranking = [...filtered].sort((a,b) => b.rewardPoints - a.rewardPoints).slice(0, 5);
+
+            document.getElementById('contentArea').innerHTML = `
+                <div class="space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-blue-600 p-6 rounded-3xl text-white shadow-xl">
+                            <p class="text-blue-100 text-[10px] font-bold uppercase tracking-wider">Total Siswa Kelas ${currentSelectedClass}</p>
+                            <h3 class="text-4xl font-black mt-2">${filtered.length}</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Poin Prestasi</p>
+                            <h3 class="text-4xl font-black text-emerald-600 mt-2">${filtered.reduce((a,b) => a + b.rewardPoints, 0)}</h3>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Poin Pinalti</p>
+                            <h3 class="text-4xl font-black text-rose-600 mt-2">${filtered.reduce((a,b) => a + b.penaltyPoints, 0)}</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                        <h3 class="font-bold text-slate-800 mb-6 flex items-center gap-2 uppercase text-xs tracking-widest">
+                            <i class="fas fa-crown text-amber-400"></i> Top 5 Siswa Teladan Kelas ${currentSelectedClass}
+                        </h3>
+                        <div class="space-y-4">
+                            ${ranking.length === 0 ? `<p class="text-slate-400 italic">Belum ada data prestasi.</p>` : 
+                              ranking.map((s, i) => `
+                                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <div class="flex items-center gap-4">
+                                        <span class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">${i+1}</span>
+                                        <span class="font-bold text-slate-700">${s.name}</span>
+                                    </div>
+                                    <span class="font-black text-emerald-600">${s.rewardPoints} POIN</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleModal(id, show) {
+            document.getElementById(id).classList.toggle('hidden', !show);
+            if(show) document.getElementById('targetClassSelect').value = currentSelectedClass;
+        }
+
+        function processBulkInput() {
+            const input = document.getElementById('bulkInputArea').value.trim();
+            const targetClass = document.getElementById('targetClassSelect').value;
+            if (!input) return;
+
+            const newStudents = input.split('\n').filter(n => n.trim() !== "").map(name => ({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                name: name.trim(),
+                class: targetClass,
+                nis: "NIS-" + (Math.floor(Math.random() * 9000) + 1000),
+                attendance: "-",
+                lastDate: "-",
+                penaltyPoints: 0,
+                rewardPoints: 0
+            }));
+
+            students = [...students, ...newStudents];
+            document.getElementById('bulkInputArea').value = "";
+            toggleModal('modalMassal', false);
+            selectClass(targetClass);
+            showToast(`${newStudents.length} siswa berhasil masuk Kelas ${targetClass}.`, 'success');
+        }
+
+        function deleteStudent(id) {
+            students = students.filter(s => s.id !== id);
+            renderManage();
+        }
+
+        function showToast(msg, type) {
+            const toast = document.createElement('div');
+            const color = type === 'reward' ? 'bg-emerald-600' : (type === 'penalty' ? 'bg-rose-600' : 'bg-blue-600');
+            toast.className = `fixed bottom-6 right-6 ${color} text-white px-6 py-4 rounded-2xl shadow-2xl z-[200] flex items-center gap-3 animate-bounce`;
+            toast.innerHTML = `<i class="fas fa-bell"></i> <span class="text-sm font-bold">${msg}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+    </script>
+</body>
+</html>
